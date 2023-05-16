@@ -409,8 +409,7 @@ namespace RaidCrawler.WinForms
                     UpdateStatus("Changing date...");
 
                     bool streamer = Config.StreamerView && teraRaidView is not null;
-                    Action<int>? action = streamer ? teraRaidView!.UpdateProgressBar : null;
-                    await ConnectionWrapper.AdvanceDate(Config, token, action).ConfigureAwait(false);
+                    await ConnectionWrapper.AdvanceDate(token).ConfigureAwait(false);
                     await ReadRaids(token).ConfigureAwait(false);
                     raids = RaidContainer.Raids;
 
@@ -480,8 +479,7 @@ namespace RaidCrawler.WinForms
                     }
 
                     // Save game on match.
-                    if (Config.SaveOnMatch && satisfied_filters.Count > 0)
-                        await ConnectionWrapper.SaveGame(Config, token).ConfigureAwait(false);
+                    await ConnectionWrapper.SaveGame(Config, token).ConfigureAwait(false);
 
                     if (Config.EnableAlertWindow)
                         await ErrorHandler.DisplayMessageBox(this, Webhook, $"{Config.AlertWindowMessage}\n\nTime Spent: {time}", token, "Result found!").ConfigureAwait(false);
@@ -490,6 +488,7 @@ namespace RaidCrawler.WinForms
             }
             catch (Exception ex)
             {
+
                 UpdateStatus("Date advance stopped.");
                 SearchTimer.Stop();
                 if (ex is not TaskCanceledException)
@@ -506,6 +505,7 @@ namespace RaidCrawler.WinForms
 
             ButtonEnable(new[] { ButtonViewRAM, ButtonAdvanceDate, ButtonDisconnect, ButtonDownloadEvents, SendScreenshot, ButtonReadRaids }, true);
             DateAdvanceSource = new();
+            await ConnectionWrapper.HardStop(token).ConfigureAwait(false);
         }
 
         private void StopAdvanceButton_Click(object sender, EventArgs e)
@@ -1143,7 +1143,9 @@ namespace RaidCrawler.WinForms
             RaidContainer.ClearRewards();
 
             UpdateStatus("Reading raid block...");
+
             var data = await ConnectionWrapper.Connection.ReadBytesAbsoluteAsync(RaidBlockOffset + RaidBlock.HEADER_SIZE, (int)(RaidBlock.SIZE - RaidBlock.HEADER_SIZE), token).ConfigureAwait(false);
+            //var data = await ConnectionWrapper.Connection.ReadBytesAbsoluteAsync(RaidBlockOffset + RaidBlock.HEADER_SIZE + 0x20, 0x20, token).ConfigureAwait(false);
 
             var msg = string.Empty;
             (int delivery, int enc) = RaidContainer.ReadAllRaids(data, Config.Progress, Config.EventProgress, GetRaidBoost());

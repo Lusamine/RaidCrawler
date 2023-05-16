@@ -5,6 +5,7 @@ using SysBot.Base;
 using System.Net.Sockets;
 using System.Text;
 using static SysBot.Base.SwitchButton;
+using static SysBot.Base.SwitchStick;
 
 namespace RaidCrawler.Core.Connection
 {
@@ -64,11 +65,13 @@ namespace RaidCrawler.Core.Connection
                 Connection.Disconnect();
                 IsConnected = false;
                 _statusUpdate("Disconnected!");
+                await HardStop(token).ConfigureAwait(false);
                 return (true, "");
             }
             catch (SocketException e)
             {
                 IsConnected = false;
+                await HardStop(token).ConfigureAwait(false);
                 return (false, e.Message);
             }
         }
@@ -184,132 +187,42 @@ namespace RaidCrawler.Core.Connection
         }
 
         // Thank you to Anubis for sharing a more optimized routine, as well as CloseGame(), StartGame(), and SaveGame()!
-        public async Task AdvanceDate(IDateAdvanceConfig config, CancellationToken token, Action<int>? action = null)
+        public async Task AdvanceDate(CancellationToken token)
         {
             // Not great, but when adding/removing clicks, make sure to account for command count for an accurate StreamerView progress bar.
-            int steps = (config.UseTouch ? 19 : 25) + (config.UseOvershoot ? 2 : config.SystemDownPresses) + (config.DodgeSystemUpdate ? 2 : 0) + config.DaysToSkip;
-
-            _statusUpdate("Changing date...");
-            var BaseDelay = config.BaseDelay;
-
-            // Sometimes the first command drops, click twice with shorter delays for good measure.
-            await Click(B, 0_100, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
-
-            await Click(B, 0_100, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
+            await Click(B, 0_500, token).ConfigureAwait(false); // Sometimes it seems like the first command doesn't go through so send this just in case
 
             // HOME Menu
-            await Click(HOME, config.OpenHomeDelay + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
+            await Click(HOME, 0_800, token).ConfigureAwait(false);
 
             // Navigate to Settings
-            if (config.UseTouch)
-            {
-                await Touch(0_840, 0_540, 0_050, 0, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
-            }
-            else
-            {
-                await Click(DDOWN, config.NavigateToSettingsDelay + BaseDelay, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
-
-                for (int i = 0; i < 5; i++)
-                {
-                    await Click(DRIGHT, config.NavigateToSettingsDelay + BaseDelay, token).ConfigureAwait(false);
-                    UpdateProgressBar(action, steps);
-                }
-            }
-
-            await Click(A, config.OpenSettingsDelay + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
+            await Touch(840, 540, 0_050, 0, token).ConfigureAwait(false);
+            await Click(A, 1_250, token).ConfigureAwait(false);
 
             // Scroll to bottom
-            if (config.UseSetStick)
-                await SetStick(SwitchStick.LEFT, 0, -30_000, config.HoldDuration, 0_100 + BaseDelay, token).ConfigureAwait(false);
-            else await PressAndHold(DDOWN, config.HoldDuration, 0_100 + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
+            await PressAndHold(DDOWN, 2_000, 0_100, token).ConfigureAwait(false);
 
             // Navigate to "Date and Time"
-            _statusUpdate("Navigating to \"Date and Time\"...");
-            await Click(A, 0_300 + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
-
+            await Click(A, 0_300, token).ConfigureAwait(false);
             // Hold down to overshoot Date/Time by one. DUP to recover.
-            if (config.UseOvershoot)
-            {
-                if (config.UseSetStick)
-                    await SetStick(SwitchStick.LEFT, 0, -30_000, config.SystemOvershoot, 0_100 + BaseDelay, token).ConfigureAwait(false);
-                else await PressAndHold(DDOWN, config.SystemOvershoot, 0_100 + BaseDelay, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
+            await SetStick(LEFT, 0, -30000, 0_830, 0, token).ConfigureAwait(false);
+            await SetStick(LEFT, 0, 0, 0_500, 0, token).ConfigureAwait(false);
 
-                await Click(DUP, 0_500 + BaseDelay, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
-            }
-            else
-            {
-                for (int i = 0; i < config.SystemDownPresses; i++)
-                {
-                    await Click(DDOWN, 0_100 + BaseDelay, token).ConfigureAwait(false);
-                    UpdateProgressBar(action, steps);
-                }
-            }
+            await Click(A, 0_100, token).ConfigureAwait(false);
+            await Touch(950, 400, 0_100, 0_300, token).ConfigureAwait(false);
+            for (int i = 0; i < 6; i++) await Click(DRIGHT, 0_050, token).ConfigureAwait(false);
+            await Touch(950, 400, 0_100, 0_300, token).ConfigureAwait(false);
+            await Click(A, 0_100, token).ConfigureAwait(false);
 
-            // Enter Date/Time
-            await Click(A, config.Submenu + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
+            await Click(A, 0_200, token).ConfigureAwait(false);
 
-            // Open Date/Time settings
-            if (config.UseTouch)
-            {
-                await Touch(0_950, 0_400, 0_050, 0, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
-            }
-            else
-            {
-                for (int i = 0; i < 2; i++)
-                {
-                    await Click(DDOWN, 0_100 + BaseDelay, token).ConfigureAwait(false);
-                    UpdateProgressBar(action, steps);
-                }
-            }
-
-            await Click(A, config.DateChange + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
-
-            for (int i = 0; i < config.DaysToSkip; i++)
-            {
-                await Click(DUP, 0_100 + BaseDelay, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
-            }
-
-            for (int i = 0; i < 6; i++)
-            {
-                await Click(DRIGHT, (i < 5 ? 0_050 : 0_100) + BaseDelay, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
-            }
-
-            await Click(A, 0_150 + config.DateChange + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
+            await Click(DUP, 0_105, token).ConfigureAwait(false);
+            for (int i = 0; i < 6; i++) await Click(DRIGHT, 0_105, token).ConfigureAwait(false);
+            await Click(A, 0_500, token).ConfigureAwait(false);
 
             // Return to game
-            await Click(HOME, config.ReturnHomeDelay + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
-
-            await Click(HOME, (config.DodgeSystemUpdate ? 0_500 : config.ReturnGameDelay) + BaseDelay, token).ConfigureAwait(false);
-            UpdateProgressBar(action, steps);
-
-            if (config.DodgeSystemUpdate)
-            {
-                // Attempt to dodge an update prompt.
-                await Click(DUP, 0_600 + BaseDelay, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
-
-                await Click(A, config.ReturnGameDelay + BaseDelay, token).ConfigureAwait(false);
-                UpdateProgressBar(action, steps);
-            }
-
-            _statusUpdate("Back in the game...");
+            await Click(HOME, 0_800, token).ConfigureAwait(false);
+            await Click(HOME, 2_200, token).ConfigureAwait(false);
         }
 
         public async Task CloseGame(CancellationToken token)
@@ -374,6 +287,11 @@ namespace RaidCrawler.Core.Connection
                 return;
 
             action.Invoke(steps);
+        }
+
+        public async Task HardStop(CancellationToken token)
+        {
+            await SetStick(LEFT, 0, 0, 0_500, 0_500, token).ConfigureAwait(false);
         }
     }
 }
